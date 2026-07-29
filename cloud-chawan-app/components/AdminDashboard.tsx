@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createSupabaseClient } from "@/lib/supabase";
 import { useAdminWishlistRequests } from "@/hooks/useAdminWishlistRequests";
 
 function formatDate(value: string) {
@@ -24,9 +26,12 @@ function formatDate(value: string) {
 }
 
 export function AdminDashboard() {
-  const { requests, isLoading, error } = useAdminWishlistRequests();
+  const router = useRouter();
+  const { requests, isLoading, error, refreshRequests } = useAdminWishlistRequests();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCollection, setSelectedCollection] = useState("all");
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
 
   const collectionOptions = useMemo(() => {
     return Array.from(
@@ -48,6 +53,36 @@ export function AdminDashboard() {
     });
   }, [requests, searchTerm, selectedCollection]);
 
+  async function handleSignOut() {
+    const supabase = createSupabaseClient();
+    await supabase.auth.signOut();
+    router.replace("/admin/login");
+  }
+
+  async function handleToggleContacted(requestId: string, currentValue: boolean) {
+    setUpdatingId(requestId);
+    setUpdateError(null);
+
+    try {
+      const supabase = createSupabaseClient();
+      const { error: updateError } = await supabase
+        .from("wishlist_requests")
+        .update({ contacted: !currentValue })
+        .eq("id", requestId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      await refreshRequests();
+    } catch (error) {
+      console.error("Failed to update contacted status", error);
+      setUpdateError("We couldn’t update the contacted status right now.");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(239,192,203,0.28),_transparent_34%),linear-gradient(135deg,_#FFFEFD_0%,_#F4F9EE_100%)] px-4 py-6 text-[#334155] sm:px-6 lg:px-8 lg:py-8">
       <section className="mx-auto flex max-w-6xl flex-col gap-6 rounded-[2rem] border border-[#EAEAEA]/80 bg-[#FFFEFD]/90 p-5 shadow-[0_24px_80px_rgba(51,65,85,0.08)] sm:p-8 lg:p-10">
@@ -59,8 +94,17 @@ export function AdminDashboard() {
               A calm read-only view of the requests that are waiting for a reply.
             </p>
           </div>
-          <div className="rounded-full border border-[#EFC0CB]/70 bg-[#FBE8EE] px-3.5 py-2 text-sm font-medium text-[#334155]/80">
-            {requests.length} requests
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="rounded-full border border-[#EFC0CB]/70 bg-[#FBE8EE] px-3.5 py-2 text-sm font-medium text-[#334155]/80">
+              {requests.length} requests
+            </div>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="rounded-full border border-[#EAEAEA] bg-[#FFFEFD] px-3.5 py-2 text-sm font-medium text-[#334155]"
+            >
+              Sign out
+            </button>
           </div>
         </div>
 
@@ -110,6 +154,12 @@ export function AdminDashboard() {
           </div>
         ) : null}
 
+        {updateError ? (
+          <div className="rounded-[1.5rem] border border-[#EAEAEA] bg-[#FCFCFA] p-6 text-sm text-[#b91c1c] shadow-[0_16px_36px_rgba(51,65,85,0.06)]">
+            {updateError}
+          </div>
+        ) : null}
+
         {!isLoading && !error && filteredRequests.length === 0 ? (
           <div className="rounded-[1.5rem] border border-[#EAEAEA] bg-[#FCFCFA] p-6 text-sm text-[#334155]/70 shadow-[0_16px_36px_rgba(51,65,85,0.06)]">
             No wishlist requests match your current search.
@@ -142,9 +192,14 @@ export function AdminDashboard() {
                       <td className="max-w-[320px] px-4 py-3 text-sm leading-7 text-[#334155]/75">{request.message}</td>
                       <td className="px-4 py-3 text-sm text-[#334155]/70">{formatDate(request.createdAt)}</td>
                       <td className="px-4 py-3">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.24em] ${request.contacted ? "bg-[#C5D9B8]/70 text-[#334155]" : "bg-[#FBE8EE] text-[#334155]/80"}`}>
-                          {request.contacted ? "Contacted" : "Pending"}
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleContacted(request.id, request.contacted)}
+                          disabled={updatingId === request.id}
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.24em] transition-opacity ${request.contacted ? "bg-[#C5D9B8]/70 text-[#334155]" : "bg-[#FBE8EE] text-[#334155]/80"} ${updatingId === request.id ? "cursor-wait opacity-70" : "cursor-pointer"}`}
+                        >
+                          {updatingId === request.id ? "Updating..." : request.contacted ? "Contacted" : "Pending"}
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -176,9 +231,14 @@ export function AdminDashboard() {
                     </div>
                     <div>
                       <span className="font-semibold text-[#334155]">Contacted:</span>{" "}
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] ${request.contacted ? "bg-[#C5D9B8]/70 text-[#334155]" : "bg-[#FBE8EE] text-[#334155]/80"}`}>
-                        {request.contacted ? "Contacted" : "Pending"}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleContacted(request.id, request.contacted)}
+                        disabled={updatingId === request.id}
+                        className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] transition-opacity ${request.contacted ? "bg-[#C5D9B8]/70 text-[#334155]" : "bg-[#FBE8EE] text-[#334155]/80"} ${updatingId === request.id ? "cursor-wait opacity-70" : "cursor-pointer"}`}
+                      >
+                        {updatingId === request.id ? "Updating..." : request.contacted ? "Contacted" : "Pending"}
+                      </button>
                     </div>
                   </div>
                 </article>
