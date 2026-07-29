@@ -39,6 +39,29 @@ export function AdminDashboard() {
     ).sort((a, b) => a.localeCompare(b));
   }, [requests]);
 
+  const summaryCards = useMemo(() => {
+    const collectionCounts = requests.reduce<Record<string, number>>((counts, request) => {
+      const collectionName = request.collectionName || "Unknown collection";
+      counts[collectionName] = (counts[collectionName] ?? 0) + 1;
+      return counts;
+    }, {});
+
+    const mostRequestedCollection = Object.entries(collectionCounts).sort((a, b) => {
+      if (b[1] !== a[1]) {
+        return b[1] - a[1];
+      }
+
+      return a[0].localeCompare(b[0]);
+    })[0]?.[0] ?? "—";
+
+    return [
+      { label: "Total wishlist requests", value: requests.length },
+      { label: "Pending requests", value: requests.filter((request) => !request.contacted).length },
+      { label: "Contacted requests", value: requests.filter((request) => request.contacted).length },
+      { label: "Most requested collection", value: mostRequestedCollection },
+    ];
+  }, [requests]);
+
   const filteredRequests = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -106,6 +129,18 @@ export function AdminDashboard() {
               Sign out
             </button>
           </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {summaryCards.map((card) => (
+            <div
+              key={card.label}
+              className="rounded-[1.5rem] border border-[#EAEAEA] bg-[#FCFCFA] p-4 shadow-[0_16px_36px_rgba(51,65,85,0.06)]"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#334155]/60">{card.label}</p>
+              <p className="mt-2 text-2xl font-semibold text-[#334155]">{card.value}</p>
+            </div>
+          ))}
         </div>
 
         <div className="rounded-[1.5rem] border border-[#EAEAEA] bg-[#FCFCFA] p-4 shadow-[0_16px_36px_rgba(51,65,85,0.06)] sm:p-5">
