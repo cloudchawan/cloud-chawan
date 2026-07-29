@@ -1,7 +1,7 @@
 import { createSupabaseClient } from "./supabase";
 
 export type Collection = {
-  id: string;
+  id: number;
   slug: string;
   name: string;
   description: string | null;
