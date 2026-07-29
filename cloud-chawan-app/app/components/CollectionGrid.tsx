@@ -1,7 +1,15 @@
-import { collections } from "@/lib/collections";
+"use client";
+
+import { useState } from "react";
+import type { Collection } from "@/lib/collections";
+import { useCollections } from "@/hooks/useCollections";
 import { CollectionCard } from "./CollectionCard";
+import { WishlistModal } from "@/components/WishlistModal";
 
 export function CollectionGrid() {
+  const { collections, isLoading, error } = useCollections();
+  const [activeCollection, setActiveCollection] = useState<Collection | null>(null);
+
   return (
     <section id="gallery" className="mx-auto w-full max-w-6xl px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:pb-24">
       <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -18,11 +26,29 @@ export function CollectionGrid() {
         </p>
       </div>
 
+      {isLoading ? (
+        <div className="text-sm text-[#334155]/70">Loading collections…</div>
+      ) : null}
+
+      {!isLoading && error ? (
+        <div className="mb-6 text-sm text-[#334155]/70">{error}</div>
+      ) : null}
+
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {collections.map((collection) => (
-          <CollectionCard key={collection.id} collection={collection} />
+          <CollectionCard
+            key={collection.id}
+            collection={collection}
+            onLoveThis={() => setActiveCollection(collection)}
+          />
         ))}
       </div>
+
+      <WishlistModal
+        isOpen={Boolean(activeCollection)}
+        collection={activeCollection}
+        onClose={() => setActiveCollection(null)}
+      />
     </section>
   );
 }
